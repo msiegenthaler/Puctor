@@ -17,8 +17,6 @@ import Mailbox
 import Data.Unique.Id
 import Control.Monad.State
 
---TODO mailbox should just be a type class
-
 newtype ActorId = ActorId Id deriving Eq
 instance Show ActorId where
   show (ActorId id) = "<" ++ show id ++ ">"
@@ -26,12 +24,12 @@ instance Show ActorId where
 
 newtype ActorFactory = ActorFactory IdSupply
 
-data Actor a = Actor ActorId (Mailbox a)
+data Actor a = Actor ActorId
 
 instance Show (Actor a) where
-    show (Actor id _) = "Actor " ++ (show id)
+    show (Actor id) = "Actor " ++ (show id)
 instance Eq (Actor a) where
-    (Actor a _) == (Actor b _) = a == b
+    (Actor a) == (Actor b) = a == b
 
 
 data Message a = Message { to :: (Actor a)
@@ -48,13 +46,13 @@ type Behaviour a = a -> Next a
 
 
 
-newActor :: ActorFactory -> (Mailbox a) -> (Actor a, ActorFactory)
-newActor (ActorFactory ids) mb = (Actor id mb, ActorFactory ids')
+newActor :: ActorFactory -> (Actor a, ActorFactory)
+newActor (ActorFactory ids) = (Actor id, ActorFactory ids')
   where (myIds, ids') = splitIdSupply ids
         id = ActorId $ idFromSupply myIds
   
 actorFacory :: IO ActorFactory
 actorFacory = ActorFactory `liftM` initIdSupply 'A'
 
-enqueueMessage :: (Actor a) -> a -> IO ()
-enqueueMessage (Actor _ mb) = enqueue mb
+--enqueueMessage :: (Actor a) -> a -> IO ()
+--enqueueMessage (Actor _ mb) = enqueue mb
