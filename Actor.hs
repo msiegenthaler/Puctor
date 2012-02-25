@@ -1,66 +1,60 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
-module Actor (
-    Actor,
-    Action(..),
-    ActorResult(..),
-    spawn,
-    send,
-    once,
-    loop
+module Actor3 (
+  Actor,
+  ActorId,
+  ActorFactory,
+  newActor,
+  actorFacory,
+  Message(..),
+  Effect(..),
+  Effects,
+  Next(..),
+  Behaviour
 ) where
 
-
-import Control.Concurrent
 import Mailbox
+import Data.Unique.Id
+import Control.Monad.State
 
-data Actor a = Actor { mailbox :: Mailbox a
-                     , actorId :: String
-                     }
+--TODO mailbox should just be a type class
+
+newtype ActorId = ActorId Id deriving Eq
+instance Show ActorId where
+  show (ActorId id) = "<" ++ show id ++ ">"
+    where num = tail $ show id
+
+newtype ActorFactory = ActorFactory IdSupply
+
+data Actor a = Actor ActorId (Mailbox a)
+
 instance Show (Actor a) where
-    show a = "Actor " ++ (actorId a)
-
-data Action = forall a. Send { to :: Actor a
-                             , msg :: a}
-            | forall a. Create (Behaviour a)
-
-type Behaviour a = a -> ActorResult a
-
-data ActorResult a = Terminate
-                   | Continue (Behaviour a) [Action]
-                   | ActorIO (IO (ActorResult a))
+    show (Actor id _) = "Actor " ++ (show id)
+instance Eq (Actor a) where
+    (Actor a _) == (Actor b _) = a == b
 
 
-spawn :: (Behaviour a) -> (IO (Actor a))
-spawn b = do
-        mb <- newMailbox
-        tid  <- forkIO $ runActor mb b
-        return $ Actor mb $ tid2id tid
-    where tid2id tid = show tid
+data Message a = Message { to :: (Actor a)
+                         , msg :: a }
+
+data Effect = forall a. Send (Message a)
+            | forall a. Spawn (Actor a) (Behaviour a)
+type Effects = [Effect]
 
 
-send :: a -> (Actor a) -> (IO ())
-send msg actor = enqueue mb msg
-    where mb = mailbox actor 
+data Next a = Terminate Effects
+            | Continue (Behaviour a) Effects
+type Behaviour a = a -> Next a
 
 
-runActor :: (Mailbox a) -> (Behaviour a) -> (IO ())
-runActor mb b = dequeue mb >>= handle . b >>= step
-    where step (Just b') = runActor mb b'
-          step Nothing = return ()
 
-handle :: (ActorResult a) -> (IO (Maybe (Behaviour a)))
-handle Terminate = return Nothing
-handle (Continue nb as) = processAction `mapM` as >> (return $ Just nb)
-    where processAction (Send (Actor mb _) msg) = enqueue mb msg
-          processAction (Create b) = spawn b >> (return ())
-handle (ActorIO io) = io >>= handle
+newActor :: ActorFactory -> (Mailbox a) -> (Actor a, ActorFactory)
+newActor (ActorFactory ids) mb = (Actor id mb, ActorFactory ids')
+  where (myIds, ids') = splitIdSupply ids
+        id = ActorId $ idFromSupply myIds
+  
+actorFacory :: IO ActorFactory
+actorFacory = ActorFactory `liftM` initIdSupply 'A'
 
-
-once :: (a -> IO b) -> (Behaviour a)
-once f msg = ActorIO (f msg >> return Terminate)
-
-loop :: (a -> IO b) -> (Behaviour a)
-loop f msg = ActorIO (f msg >> return cont)
-    where cont = Continue (loop f) []
-
+enqueueMessage :: (Actor a) -> a -> IO ()
+enqueueMessage (Actor _ mb) = enqueue mb
