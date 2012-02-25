@@ -3,7 +3,7 @@ module ActorState (
 
 import Data.Unique.Id
 import Control.Monad.State
-import Actor3
+import Actor
 
 
 data ActorAcc a = ActorAcc { myself :: (Actor a)

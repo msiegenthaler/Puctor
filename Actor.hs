@@ -1,6 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
-module Actor3 (
+module Actor (
   Actor,
   ActorId,
   ActorFactory,
