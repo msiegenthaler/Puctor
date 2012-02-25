@@ -4,8 +4,9 @@ module Actor (
   Actor,
   ActorId,
   ActorFactory,
+  actorId,
   newActor,
-  actorFacory,
+  actorFactory,
   Message(..),
   Effect(..),
   Effects,
@@ -17,7 +18,7 @@ import Mailbox
 import Data.Unique.Id
 import Control.Monad.State
 
-newtype ActorId = ActorId Id deriving Eq
+newtype ActorId = ActorId Id deriving (Eq, Ord)
 instance Show ActorId where
   show (ActorId id) = "<" ++ show id ++ ">"
     where num = tail $ show id
@@ -41,18 +42,18 @@ type Effects = [Effect]
 
 
 data Next a = Terminate Effects
-            | Continue (Behaviour a) Effects
-type Behaviour a = a -> Next a
+            | Continue (Behaviour a) ActorFactory Effects
+type Behaviour a = (Actor a) -> ActorFactory -> a -> Next a
 
 
+actorId :: (Actor a) -> ActorId
+actorId (Actor aid) = aid
 
 newActor :: ActorFactory -> (Actor a, ActorFactory)
 newActor (ActorFactory ids) = (Actor id, ActorFactory ids')
   where (myIds, ids') = splitIdSupply ids
         id = ActorId $ idFromSupply myIds
   
-actorFacory :: IO ActorFactory
-actorFacory = ActorFactory `liftM` initIdSupply 'A'
+actorFactory :: IO ActorFactory
+actorFactory = ActorFactory `liftM` initIdSupply 'A'
 
---enqueueMessage :: (Actor a) -> a -> IO ()
---enqueueMessage (Actor _ mb) = enqueue mb

@@ -1,7 +1,8 @@
 module ActorState (
     self,
     spawn,
-    send
+    send,
+    runActor
 ) where
 
 import Data.Unique.Id
@@ -24,8 +25,6 @@ type ActorState a r = State (ActorAcc a) r
 self :: ActorState a (Actor a)
 self = myself `liftM` get
 
-
-
 spawn :: Behaviour a -> ActorState b (Actor a)
 spawn b = do
         (a, s') <- createActor `liftM` get
@@ -46,5 +45,8 @@ addEffect e acc = updateEffects . (e:) . effects $ acc
 addMessage = addEffect . Send
 addSpawn a b = addEffect $ Spawn a b
 
-runActor :: (ActorState a b) -> Effects
-runActor = undefined
+
+runActor :: (ActorState a b) -> (Actor a) -> ActorFactory -> (Effects, ActorFactory)
+runActor s a af = out . snd $ runState s initial
+    where initial = ActorAcc a [] af
+          out acc = (reverse . effects acc, factory acc)

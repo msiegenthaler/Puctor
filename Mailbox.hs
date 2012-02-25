@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module Mailbox (
 	Mailbox,
 	newMailbox,
@@ -8,9 +10,10 @@ module Mailbox (
 import Control.Concurrent.STM
 import Control.Concurrent
 import Control.Monad
+import Data.Dynamic
 
 
-newtype Mailbox a = Mailbox (TChan a)
+newtype Mailbox a = Mailbox (TChan a) deriving (Typeable)
 
 newMailbox :: IO (Mailbox a)
 newMailbox = atomically $ Mailbox `liftM` newTChan
