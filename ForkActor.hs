@@ -5,44 +5,46 @@ import Actor
 import Mailbox
 import Control.Monad
 import Control.Concurrent
-import PostOffice
+import System.IO.Unsafe
 
 
-data ActorImpl a = ActorImpl { actor   :: Actor a
-							 , mailbox :: Mailbox a
-							 , factory :: ActorFactory
-							 , postOffice :: PostOffice
-							 }
+data ForkActor msg = ForkActor ActorId (Mailbox msg)
+
+instance Actor ForkActor where
+    actorId   (ForkActor aid _)    = aid
+    actorSend (ForkActor _ mb) msg = mb `enqueue` msg
+
+type ForkBehaviour msg  = Behaviour ForkActor msg
+type ForkSpawn msg = ActorSpawn (ForkActor msg)
 
 
+forkActor :: (ForkBehaviour msg) -> ActorCreator (ForkActor msg)
+forkActor b af = (afa, ActorSpawn a (startActor a afb b))
+    where (af', afa) = splitActorFactory af
+          (aid, afb) = newActorId af'
+          mb = createMailbox
+          a = ForkActor aid mb
 
-updateFactory :: (ActorImpl a) -> ActorFactory -> (ActorImpl a)
-updateFactory (ActorImpl a mb _ po) f = ActorImpl a mb f po
+createMailbox :: Mailbox msg
+createMailbox = unsafePerformIO newMailbox
+
+actorMailbox :: (ForkActor msg) -> Mailbox msg
+actorMailbox (ForkActor _ mb) = mb
+
+nextMsg :: (ForkActor msg) -> IO msg
+nextMsg = dequeue . actorMailbox
 
 
-runActor :: (ActorImpl a) -> (Behaviour a) -> IO ()
-runActor a b = let bp = b (actor a) (factory a) in
-			   let nextMsg = dequeue $ mailbox a in
-	bp `liftM` nextMsg >>= (handleNext a)
+startActor a af b = (forkIO $ runActor a af b) >> return ()
 
-handleNext :: (ActorImpl a) -> (Next a) -> IO ()
-handleNext a (Terminate es)     = (handleEffect a) `mapM` es >> return ()
-handleNext a (Continue b af es) = (handleEffect a) `mapM` es >> runActor a' b
-	where a' = updateFactory a af
+runActor :: (ForkActor msg) -> ActorFactory -> (ForkBehaviour msg) -> IO ()
+runActor a af b = bp `liftM` (nextMsg a) >>= (handleNext a)
+    where bp = b a af
 
+handleNext :: (ForkActor msg) -> (Next ForkActor msg) -> IO ()
+handleNext a (Terminate es)     = handleEffect `mapM` es >> return ()
+handleNext a (Continue b af es) = handleEffect `mapM` es >> runActor a af b
 
-handleEffect :: (ActorImpl a) -> Effect -> IO ()
-handleEffect ai (Spawn a b) = do
-		mb <- createMailbox (postOffice ai) a
-		af <- actorFactory
-		ai <- return $ ActorImpl a mb af (postOffice ai)
-		forkIO $ runActor ai b
-		return ()
-handleEffect ai (Send (Message a msg)) = sendTo ai a msg
-
-sendTo :: (ActorImpl b) -> (Actor a) -> a -> IO ()
-sendTo ai a msg = let po = postOffice ai in
-		(getMailbox po a >>= send)
-	where send (Just mb) = enqueue mb msg
-	      send Nothing   = return ()
-
+handleEffect :: Effect -> IO ()
+handleEffect (Send (Message to msg)) = actorSend to msg
+handleEffect (Spawn (ActorSpawn _ io)) = io

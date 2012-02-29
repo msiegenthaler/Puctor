@@ -1,13 +1,17 @@
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE ExistentialQuantification, FlexibleInstances #-}
 
 module Actor (
   Actor,
   ActorId,
   ActorFactory,
+  ActorCreator,
   actorId,
-  newActor,
+  actorSend,
+  newActorId,
+  splitActorFactory,
   actorFactory,
   Message(..),
+  ActorSpawn(..),
   Effect(..),
   Effects,
   Next(..),
@@ -18,41 +22,54 @@ import Mailbox
 import Data.Unique.Id
 import Control.Monad.State
 
+
 newtype ActorId = ActorId Id deriving (Eq, Ord)
 instance Show ActorId where
   show (ActorId id) = "<" ++ show id ++ ">"
     where num = tail $ show id
 
+class Actor actor where
+    actorId :: actor msg -> ActorId
+    actorSend :: actor msg -> msg -> IO ()
+
+instance (Actor a) => Show (a b) where
+    show = ("Actor "++) . show . actorId
+instance (Actor a) => Eq (a b) where
+    a == b = (actorId a) == (actorId b)
+
+
 newtype ActorFactory = ActorFactory IdSupply
 
-data Actor a = Actor ActorId
+data Message actor msg = Message  { to :: actor msg
+                                  , msg :: msg }
 
-instance Show (Actor a) where
-    show (Actor id) = "Actor " ++ (show id)
-instance Eq (Actor a) where
-    (Actor a) == (Actor b) = a == b
+data ActorSpawn a = ActorSpawn { actor       :: a
+                               , spawnAction :: IO ()}                            
 
 
-data Message a = Message { to :: (Actor a)
-                         , msg :: a }
-
-data Effect = forall a. Send (Message a)
-            | forall a. Spawn (Actor a) (Behaviour a)
+data Effect = forall actor msg. Actor actor => Send (Message actor msg)
+            | forall actor msg. Actor actor => Spawn (ActorSpawn (actor msg))
 type Effects = [Effect]
 
 
-data Next a = Terminate Effects
-            | Continue (Behaviour a) ActorFactory Effects
-type Behaviour a = (Actor a) -> ActorFactory -> a -> Next a
+data Next actor msg = Terminate Effects
+                    | Continue (Behaviour actor msg) ActorFactory Effects
+type Behaviour actor msg = (actor msg) -> ActorFactory -> msg -> Next actor msg
 
 
-actorId :: (Actor a) -> ActorId
-actorId (Actor aid) = aid
+type ActorCreator a = ActorFactory -> (ActorFactory, ActorSpawn a)
 
-newActor :: ActorFactory -> (Actor a, ActorFactory)
-newActor (ActorFactory ids) = (Actor id, ActorFactory ids')
-  where (myIds, ids') = splitIdSupply ids
-        id = ActorId $ idFromSupply myIds
+newActorId :: ActorFactory -> (ActorId, ActorFactory)
+newActorId af = idFromActorFactory `mapfst` (splitActorFactory af)
+
+mapfst f (a,b) = (f a, b)
+
+idFromActorFactory :: ActorFactory -> ActorId
+idFromActorFactory (ActorFactory ids) = ActorId $ idFromSupply ids
+
+splitActorFactory :: ActorFactory -> (ActorFactory, ActorFactory)
+splitActorFactory (ActorFactory ids) = (ActorFactory idsa, ActorFactory idsb)
+    where (idsa, idsb) = splitIdSupply ids
   
 actorFactory :: IO ActorFactory
 actorFactory = ActorFactory `liftM` initIdSupply 'A'

@@ -12,41 +12,48 @@ import Mailbox
 import Control.Arrow (second)
 
 
+data NextAction a msg = Loop
+                      | ChangeAction (msg -> ActorState a msg (NextAction a msg))
+                      | End
 
-data ActorAcc a = ActorAcc { myself :: (Actor a)
-                           , effects :: [Effect]
-                           , factory :: ActorFactory
-                           }
+data ActorAcc a msg = ActorAcc { myself :: a msg
+                               , effects :: [Effect]
+                               , factory :: ActorFactory}
 
 --TODO newtype?
-type ActorState a r = State (ActorAcc a) r
+type ActorState a msg r = State (ActorAcc a msg) r
 
 
-self :: ActorState a (Actor a)
+self :: Actor a => ActorState a msg (a msg)
 self = myself `liftM` get
 
-spawn :: Behaviour a -> ActorState b (Actor a)
-spawn b = do
-        (a, s') <- createActor `liftM` get
-        put (addSpawn a b s')
-        return a
 
-send :: (Actor a) -> a -> ActorState b ()
-send a msg = (addMessage $ Message a msg) `liftM` get >>= put
+spawn :: Actor actor => (ActorCreator (actor msg)) -> ActorState a b (actor msg)
+spawn c = do
+    (na, s') <- (createActor c) `liftM` get
+    put s'
+    return na
 
-createActor :: (ActorAcc a) -> (Actor b, ActorAcc a)
-createActor acc = (second updateFactory) . newActor . factory $ acc
-    where updateFactory fac = acc { factory = fac }
+createActor c (ActorAcc a es af) = (actor as, ActorAcc a es' af')
+    where (af', as) = c af
+          es' = (Spawn as) : es
 
-addEffect :: Effect -> (ActorAcc a) -> (ActorAcc a)
+send :: Actor to => to msg -> msg -> ActorState a b ()
+send a msg = (addMessage message) `liftM` get >>= put
+    where message = Message a msg
+
+
+addMessage m = addEffect $ Send m
+
+addEffect :: Effect -> (ActorAcc a msg) -> (ActorAcc a msg)
 addEffect e acc = updateEffects . (e:) . effects $ acc
     where updateEffects es = acc { effects = es }
 
-addMessage = addEffect . Send
-addSpawn a b = addEffect $ Spawn a b
 
-
-runActor :: (ActorState a b) -> (Actor a) -> ActorFactory -> (Effects, ActorFactory)
-runActor s a af = out . snd $ runState s initial
-    where initial = ActorAcc a [] af
-          out acc = (reverse . effects acc, factory acc)
+runActor :: Actor a => (msg -> ActorState a msg (NextAction a msg)) -> Behaviour a msg
+runActor f a af msg = case next of
+        (ChangeAction f') -> cont f'
+        Loop              -> cont f
+        End               -> Terminate $ effects s
+    where (next, s) = runState (f msg) (ActorAcc a [] af)
+          cont nf = Continue (runActor nf) (factory s) (effects s)

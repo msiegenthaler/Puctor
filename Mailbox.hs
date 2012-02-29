@@ -16,7 +16,7 @@ import Data.Dynamic
 newtype Mailbox a = Mailbox (TChan a) deriving (Typeable)
 
 newMailbox :: IO (Mailbox a)
-newMailbox = atomically $ Mailbox `liftM` newTChan
+newMailbox = Mailbox `liftM` newTChanIO
 
 dequeue :: (Mailbox a) -> (IO a)
 dequeue (Mailbox c) = atomically $ readTChan c
