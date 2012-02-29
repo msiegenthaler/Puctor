@@ -2,6 +2,8 @@ module ActorState (
     self,
     spawn,
     send,
+    NextAction(..),
+    ActorState,
     runActor
 ) where
 
@@ -20,16 +22,16 @@ data ActorAcc a msg = ActorAcc { myself :: a msg
                                , effects :: [Effect]
                                , factory :: ActorFactory}
 
---TODO newtype?
-type ActorState a msg r = State (ActorAcc a msg) r
+newtype ActorState a msg r = ActorState (State (ActorAcc a msg) r)
+unwrap (ActorState s) = s
 
 
 self :: Actor a => ActorState a msg (a msg)
-self = myself `liftM` get
+self = ActorState $ myself `liftM` get
 
 
 spawn :: Actor actor => (ActorCreator (actor msg)) -> ActorState a b (actor msg)
-spawn c = do
+spawn c = ActorState $ do
     (na, s') <- (createActor c) `liftM` get
     put s'
     return na
@@ -39,7 +41,7 @@ createActor c (ActorAcc a es af) = (actor as, ActorAcc a es' af')
           es' = (Spawn as) : es
 
 send :: Actor to => to msg -> msg -> ActorState a b ()
-send a msg = (addMessage message) `liftM` get >>= put
+send a msg = ActorState $ (addMessage message) `liftM` get >>= put
     where message = Message a msg
 
 
@@ -55,5 +57,5 @@ runActor f a af msg = case next of
         (ChangeAction f') -> cont f'
         Loop              -> cont f
         End               -> Terminate $ effects s
-    where (next, s) = runState (f msg) (ActorAcc a [] af)
+    where (next, s) = runState (unwrap (f msg)) (ActorAcc a [] af)
           cont nf = Continue (runActor nf) (factory s) (effects s)
