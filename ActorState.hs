@@ -57,6 +57,7 @@ runActor :: Actor a => (msg -> ActorState a msg (NextAction a msg)) -> Behaviour
 runActor f a af msg = case next of
         (ChangeAction f') -> cont f'
         Loop              -> cont f
-        End               -> Terminate $ effects s
+        End               -> Terminate es
     where (next, s) = runState (unwrap (f msg)) (ActorAcc a [] af)
-          cont nf = Continue (runActor nf) (factory s) (effects s)
+          es = reverse $ effects s
+          cont nf = Continue (runActor nf) (factory s) es
