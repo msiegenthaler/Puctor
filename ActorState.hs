@@ -23,15 +23,16 @@ data ActorAcc a msg = ActorAcc { myself :: a msg
                                , factory :: ActorFactory}
 
 newtype ActorState a msg r = ActorState (State (ActorAcc a msg) r)
+wrap = ActorState
 unwrap (ActorState s) = s
 
 
 self :: Actor a => ActorState a msg (a msg)
-self = ActorState $ myself `liftM` get
+self = wrap $ myself `liftM` get
 
 
 spawn :: Actor actor => (ActorCreator (actor msg)) -> ActorState a b (actor msg)
-spawn c = ActorState $ do
+spawn c = wrap $ do
     (na, s') <- (createActor c) `liftM` get
     put s'
     return na
@@ -41,7 +42,7 @@ createActor c (ActorAcc a es af) = (actor as, ActorAcc a es' af')
           es' = (Spawn as) : es
 
 send :: Actor to => to msg -> msg -> ActorState a b ()
-send a msg = ActorState $ (addMessage message) `liftM` get >>= put
+send a msg = wrap $ (addMessage message) `liftM` get >>= put
     where message = Message a msg
 
 
