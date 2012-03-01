@@ -6,14 +6,14 @@ module Control.Concurrent.Puctor.Actor (
   ActorFactory,
   ActorCreator,
   actorId,
-  actorSend,
+  (!),
   newActorId,
   splitActorFactory,
-  actorFactory,
   Message(..),
   ActorSpawn(..),
   Effect(..),
-  Effects
+  Effects,
+  boot
 ) where
 
 import Data.Unique.Id
@@ -27,13 +27,14 @@ instance Show ActorId where
 
 class Actor actor where
     actorId :: actor msg -> ActorId
-    actorSend :: actor msg -> msg -> IO ()
+    (!) :: actor msg -> msg -> IO ()
 
+{- TODO
 instance (Actor a) => Show (a b) where
     show = ("Actor "++) . show . actorId
 instance (Actor a) => Eq (a b) where
     a == b = (actorId a) == (actorId b)
-
+-}
 
 newtype ActorFactory = ActorFactory IdSupply
 
@@ -65,4 +66,13 @@ splitActorFactory (ActorFactory ids) = (ActorFactory idsa, ActorFactory idsb)
   
 actorFactory :: IO ActorFactory
 actorFactory = ActorFactory `liftM` initIdSupply 'A'
+
+
+boot :: Actor a => ActorCreator (a msg) -> IO (a msg)
+boot c = do
+  s <- (snd . c) `liftM` actorFactory
+  spawnAction s
+  return $ actor s
+
+
 

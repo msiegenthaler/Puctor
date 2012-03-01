@@ -15,7 +15,7 @@ data ForkActor msg = ForkActor ActorId (Mailbox msg)
 
 instance Actor ForkActor where
     actorId   (ForkActor aid _)    = aid
-    actorSend (ForkActor _ mb) msg = mb `enqueue` msg
+    (!) (ForkActor _ mb) msg = mb `enqueue` msg
 
 type ForkBehaviour msg  = Behaviour ForkActor msg
 type ForkSpawn msg = ActorSpawn (ForkActor msg)
@@ -51,5 +51,5 @@ handleNext a (Terminate es)     = handleEffect `mapM` es >> return ()
 handleNext a (Continue b af es) = handleEffect `mapM` es >> runActor a af b
 
 handleEffect :: Effect -> IO ()
-handleEffect (Send (Message to msg)) = actorSend to msg
+handleEffect (Send (Message to msg)) = to ! msg
 handleEffect (Spawn (ActorSpawn _ io)) = io
