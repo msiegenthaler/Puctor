@@ -1,8 +1,11 @@
-module ForkActor (
+module Control.Concurrent.Puctor.ForkActor (
+	newActor,
+	ForkActor
 ) where
 
-import Actor
-import Mailbox
+import Control.Concurrent.Puctor.Pure
+import Control.Concurrent.Puctor.Actor
+import Control.Concurrent.Puctor.ForkActor.Mailbox
 import Control.Monad
 import Control.Concurrent
 import System.IO.Unsafe
@@ -18,12 +21,14 @@ type ForkBehaviour msg  = Behaviour ForkActor msg
 type ForkSpawn msg = ActorSpawn (ForkActor msg)
 
 
-forkActor :: (ForkBehaviour msg) -> ActorCreator (ForkActor msg)
-forkActor b af = (afa, ActorSpawn a (startActor a afb b))
+newActor :: (ForkBehaviour msg) -> ActorCreator (ForkActor msg)
+newActor b af = (afa, ActorSpawn a (startActor a afb b))
     where (af', afa) = splitActorFactory af
           (aid, afb) = newActorId af'
           mb = createMailbox
           a = ForkActor aid mb
+
+--TODO impure forkA
 
 createMailbox :: Mailbox msg
 createMailbox = unsafePerformIO newMailbox

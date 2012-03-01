@@ -1,6 +1,6 @@
 {-# LANGUAGE ExistentialQuantification, FlexibleInstances #-}
 
-module Actor (
+module Control.Concurrent.Puctor.Actor (
   Actor,
   ActorId,
   ActorFactory,
@@ -13,12 +13,9 @@ module Actor (
   Message(..),
   ActorSpawn(..),
   Effect(..),
-  Effects,
-  Next(..),
-  Behaviour
+  Effects
 ) where
 
-import Mailbox
 import Data.Unique.Id
 import Control.Monad.State
 
@@ -50,11 +47,6 @@ data ActorSpawn a = ActorSpawn { actor       :: a
 data Effect = forall actor msg. Actor actor => Send (Message actor msg)
             | forall actor msg. Actor actor => Spawn (ActorSpawn (actor msg))
 type Effects = [Effect]
-
-
-data Next actor msg = Terminate Effects
-                    | Continue (Behaviour actor msg) ActorFactory Effects
-type Behaviour actor msg = (actor msg) -> ActorFactory -> msg -> Next actor msg
 
 
 type ActorCreator a = ActorFactory -> (ActorFactory, ActorSpawn a)

@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
-module Mailbox (
+module Control.Concurrent.Puctor.ForkActor.Mailbox (
 	Mailbox,
 	newMailbox,
 	enqueue,

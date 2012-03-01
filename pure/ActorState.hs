@@ -1,4 +1,4 @@
-module ActorState (
+module Control.Concurrent.Puctor.Pure.ActorState (
     self,
     spawn,
     send,
@@ -7,11 +7,9 @@ module ActorState (
     runActor
 ) where
 
-import Data.Unique.Id
 import Control.Monad.State
-import Actor
-import Mailbox
-import Control.Arrow (second)
+import Control.Concurrent.Puctor.Actor
+import Control.Concurrent.Puctor.Pure
 
 
 data NextAction a msg = Loop
