@@ -22,16 +22,12 @@ type ForkCreator msg = ActorCreator (ForkActor msg)
 type ForkSpawn msg = ActorSpawn (ForkActor msg)
 
 
+{-# NOINLINE newActor #-}
 newActor :: (ForkBehaviour msg) -> ForkCreator msg
 newActor b af = (afa, ActorSpawn a (startActor a afb b))
     where (af', afa) = splitActorFactory af
           (aid, afb) = newActorId af'
-          mb = createMailbox
-          a = ForkActor aid mb
-
-
-createMailbox :: Mailbox msg
-createMailbox = unsafePerformIO newMailbox
+          a = ForkActor aid $ unsafePerformIO newMailbox
 
 actorMailbox :: (ForkActor msg) -> Mailbox msg
 actorMailbox (ForkActor _ mb) = mb

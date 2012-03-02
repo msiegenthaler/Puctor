@@ -22,15 +22,12 @@ type ForkCreator msg = ActorCreator (ForkActor msg)
 type ForkSpawn msg = ActorSpawn (ForkActor msg)
 
 
+{-# NOINLINE newActor #-}
 newActor :: (ForkBehaviour msg) -> ForkCreator msg
 newActor b af = (afa, ActorSpawn a (startActor a afb b))
     where (af', afa) = splitActorFactory af
           (aid, afb) = newActorId af'
-          mb = createMailbox
-          a = ForkActor aid mb
-
-createMailbox :: Mailbox msg
-createMailbox = unsafePerformIO newMailbox
+          a = ForkActor aid $ unsafePerformIO newMailbox
 
 actorMailbox :: (ForkActor msg) -> Mailbox msg
 actorMailbox (ForkActor _ mb) = mb
@@ -46,7 +43,7 @@ runActor a af b = bp `liftM` (nextMsg a) >>= (handleNext a)
     where bp = b a af
 
 handleNext :: (ForkActor msg) -> (Next ForkActor msg) -> IO ()
-handleNext a (Terminate es)     = handleEffect `mapM` es >> return ()
+handleNext a (Terminate es)     = print (length es) >> handleEffect `mapM` es >> return ()
 handleNext a (Continue b af es) = handleEffect `mapM` es >> runActor a af b
 
 handleEffect :: Effect -> IO ()
