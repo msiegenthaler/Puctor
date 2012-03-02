@@ -2,11 +2,13 @@ module Control.Concurrent.Puctor.IO (
 	Next(..),
 	Behaviour,
 	direct,
-	loop
+	loop,
+	fromPure
 ) where
 
 import Control.Monad
 import Control.Concurrent.Puctor.Actor
+import qualified Control.Concurrent.Puctor.Pure as P
 
 data Next actor msg = Terminate Effects
                     | Continue (Behaviour actor msg) ActorFactory Effects
@@ -25,3 +27,9 @@ direct2 f _ _ msg = f msg >> return []
 loop :: Actor a => (a msg -> ActorFactory -> msg -> IO Effects) -> Behaviour a msg
 loop b a af msg = again `liftM` (b a af msg)
     where again es = Continue (loop b) af es
+
+
+fromPure :: P.Behaviour a msg -> Behaviour a msg
+fromPure b a af msg = return $ case b a af msg of
+	P.Continue b' af es -> Continue (fromPure b) af es
+	P.Terminate es      -> Terminate es
