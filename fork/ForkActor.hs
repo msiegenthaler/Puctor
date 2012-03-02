@@ -35,7 +35,6 @@ actorMailbox (ForkActor _ mb) = mb
 nextMsg :: (ForkActor msg) -> IO msg
 nextMsg = dequeue . actorMailbox
 
-
 startActor a af b = (forkIO $ runActor a af b) >> return ()
 
 runActor :: (ForkActor msg) -> ActorFactory -> (ForkBehaviour msg) -> IO ()
@@ -43,7 +42,7 @@ runActor a af b = bp `liftM` (nextMsg a) >>= (handleNext a)
     where bp = b a af
 
 handleNext :: (ForkActor msg) -> (Next ForkActor msg) -> IO ()
-handleNext a (Terminate es)     = print (length es) >> handleEffect `mapM` es >> return ()
+handleNext a (Terminate es)     = handleEffect `mapM` es >> return ()
 handleNext a (Continue b af es) = handleEffect `mapM` es >> runActor a af b
 
 handleEffect :: Effect -> IO ()
