@@ -4,7 +4,8 @@ module Control.Concurrent.Puctor.Pure.ActorState (
     send,
     NextAction(..),
     ActorState,
-    runActor
+    runActor,
+    ActorStep
 ) where
 
 import Control.Monad.State
@@ -21,6 +22,14 @@ data ActorAcc a msg = ActorAcc { myself :: a msg
                                , factory :: ActorFactory}
 
 newtype ActorState a msg r = ActorState (State (ActorAcc a msg) r)
+
+type ActorStep a msg = msg -> ActorState a msg (NextAction a msg)
+
+instance Monad (ActorState a msg) where
+  x >>= f = ActorState $ (unwrap x) >>= (unwrap . f)
+  return r = wrap $ return r
+
+
 wrap = ActorState
 unwrap (ActorState s) = s
 
@@ -51,7 +60,7 @@ addEffect e acc = updateEffects . (e:) . effects $ acc
     where updateEffects es = acc { effects = es }
 
 
-runActor :: Actor a => (msg -> ActorState a msg (NextAction a msg)) -> Behaviour a msg
+runActor :: Actor a => ActorStep a msg -> Behaviour a msg
 runActor f a af msg = case next of
         (ChangeAction f') -> cont f'
         Loop              -> cont f

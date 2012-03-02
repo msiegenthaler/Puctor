@@ -7,12 +7,14 @@ module Control.Concurrent.Puctor.Actor (
   ActorCreator,
   actorId,
   (!),
+  sendMsg,
   newActorId,
   splitActorFactory,
   Message(..),
   ActorSpawn(..),
   Effect(..),
   Effects,
+  initialActor,
   boot
 ) where
 
@@ -68,11 +70,13 @@ actorFactory :: IO ActorFactory
 actorFactory = ActorFactory `liftM` initIdSupply 'A'
 
 
-boot :: Actor a => ActorCreator (a msg) -> IO (a msg)
-boot c = do
+sendMsg to msg = Send $ Message to msg
+
+initialActor :: Actor a => ActorCreator (a msg) -> IO (a msg)
+initialActor c = do
   s <- (snd . c) `liftM` actorFactory
   spawnAction s
-  return $ actor s
+  return (actor s)
 
-
-
+boot :: Actor a => ActorCreator (a ()) -> IO ()
+boot c = initialActor c >>= (flip (!)) () >> return ()

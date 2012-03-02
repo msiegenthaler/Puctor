@@ -1,9 +1,9 @@
-module Control.Concurrent.Puctor.ForkActor (
-	newActor,
-	ForkActor
+module Control.Concurrent.Puctor.ForkActorIO (
+    newActor,
+    ForkActor
 ) where
 
-import Control.Concurrent.Puctor.Pure
+import Control.Concurrent.Puctor.IO
 import Control.Concurrent.Puctor.Actor
 import Control.Concurrent.Puctor.ForkActor.Mailbox
 import Control.Monad
@@ -29,6 +29,7 @@ newActor b af = (afa, ActorSpawn a (startActor a afb b))
           mb = createMailbox
           a = ForkActor aid mb
 
+
 createMailbox :: Mailbox msg
 createMailbox = unsafePerformIO newMailbox
 
@@ -38,11 +39,10 @@ actorMailbox (ForkActor _ mb) = mb
 nextMsg :: (ForkActor msg) -> IO msg
 nextMsg = dequeue . actorMailbox
 
-
 startActor a af b = (forkIO $ runActor a af b) >> return ()
 
 runActor :: (ForkActor msg) -> ActorFactory -> (ForkBehaviour msg) -> IO ()
-runActor a af b = bp `liftM` (nextMsg a) >>= (handleNext a)
+runActor a af b = nextMsg a >>= bp >>= (handleNext a)
     where bp = b a af
 
 handleNext :: (ForkActor msg) -> (Next ForkActor msg) -> IO ()
