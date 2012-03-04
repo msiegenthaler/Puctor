@@ -21,7 +21,7 @@ import Control.Concurrent.STM
 import Unsafe.Coerce
 
 
-class Actor actor where
+class ActorImpl actor where
     sendMsg :: msg -> actor msg -> IO ()
 
 
@@ -36,12 +36,12 @@ instance Show (ActorRef msg) where
 
 
 
-data ActorBox msg = forall a. Actor a => ActorBox (a msg)
-instance Actor ActorBox where
+data ActorBox msg = forall a. ActorImpl a => ActorBox (a msg)
+instance ActorImpl ActorBox where
     sendMsg msg (ActorBox a) = sendMsg msg a
 
 data NoopActor msg = NoopActor
-instance Actor NoopActor where
+instance ActorImpl NoopActor where
     sendMsg _ _ = return ()
 
 data ActorBoxU = forall msg. ActorBoxU msg
@@ -62,13 +62,13 @@ mapBoth f (a, b) = (f a, f b)
 updateIdSupply env s = env { idSupply = s }
 
 
-newActor :: Actor actor => ActorCreate actor msg -> ActorEnv -> (ActorRef msg, ActorEnv)
+newActor :: ActorImpl actor => ActorCreate actor msg -> ActorEnv -> (ActorRef msg, ActorEnv)
 newActor f e = (ref, addTo e')
     where (ref, e') = newActorRef e
           addTo = addDeferred $ createActor f ref
 addDeferred f env = env { deferred = deferred env ++ [f] }
 
-createActor :: Actor actor => ActorCreate actor msg -> ActorRef msg -> ActorEnv -> IO ActorEnv
+createActor :: ActorImpl actor => ActorCreate actor msg -> ActorRef msg -> ActorEnv -> IO ActorEnv
 createActor f ref env = f ref >>= registerActor env ref >> return env
 registerActor env (ActorRef aid) a = atomically $ do
         m <- readTVar v
@@ -87,7 +87,7 @@ send :: ActorRef msg -> msg -> Effect
 send (ActorRef aid) msg env = lookupActor aid <$> readTVarIO (actorMap env) >>= sendMsg msg
 lookupActor aid = fromMaybe NoopActor . fmap unbox . Map.lookup aid
 
-box :: Actor a => a msg -> ActorBoxU
+box :: ActorImpl a => a msg -> ActorBoxU
 box = ActorBoxU . ActorBox
-unbox :: Actor a => ActorBoxU -> a msg
+unbox :: ActorImpl a => ActorBoxU -> a msg
 unbox (ActorBoxU box) = unsafeCoerce box
