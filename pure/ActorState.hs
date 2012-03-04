@@ -1,70 +1,65 @@
 module Control.Concurrent.Puctor.Pure.ActorState (
+    ActorState,
+    Behaviour,
+    Next(..),
     self,
     spawn,
-    send,
-    NextAction(..),
-    ActorState,
-    runActor,
-    ActorStep
+    (!),
+    runActor
 ) where
 
 import Control.Monad.State
+import Control.Applicative
 import Control.Concurrent.Puctor.Actor
-import Control.Concurrent.Puctor.Pure
+import qualified Control.Concurrent.Puctor.Pure as P
 
 
-data NextAction a msg = Loop
-                      | ChangeAction (msg -> ActorState a msg (NextAction a msg))
-                      | End
+data ActorAcc msg = ActorAcc { selfRef :: ActorRef msg
+                             , env :: ActorEnv}
 
-data ActorAcc a msg = ActorAcc { myself :: a msg
-                               , effects :: [Effect]
-                               , factory :: ActorFactory}
-
-newtype ActorState a msg r = ActorState (State (ActorAcc a msg) r)
-
-type ActorStep a msg = msg -> ActorState a msg (NextAction a msg)
-
-instance Monad (ActorState a msg) where
-  x >>= f = ActorState $ (unwrap x) >>= (unwrap . f)
-  return r = wrap $ return r
-
-
+newtype ActorState msg r = ActorState (State (ActorAcc msg) r)
 wrap = ActorState
 unwrap (ActorState s) = s
 
-
-self :: Actor a => ActorState a msg (a msg)
-self = wrap $ myself `liftM` get
-
-
-spawn :: Actor actor => (ActorCreator (actor msg)) -> ActorState a b (actor msg)
-spawn c = wrap $ do
-    (na, s') <- (createActor c) `liftM` get
-    put s'
-    return na
-
-createActor c (ActorAcc a es af) = (actor as, ActorAcc a es' af')
-    where (af', as) = c af
-          es' = (Spawn as) : es
-
-send :: Actor to => to msg -> msg -> ActorState a b ()
-send a msg = wrap $ (addMessage message) `liftM` get >>= put
-    where message = Message a msg
+instance Monad (ActorState msg) where
+  x >>= f = wrap $ (unwrap x) >>= (unwrap . f)
+  return r = wrap $ return r
 
 
-addMessage m = addEffect $ Send m
+data Next msg = Loop
+              | ChangeTo (Behaviour msg)
+              | End
+type Behaviour msg = msg -> ActorState msg (Next msg)
 
-addEffect :: Effect -> (ActorAcc a msg) -> (ActorAcc a msg)
-addEffect e acc = updateEffects . (e:) . effects $ acc
-    where updateEffects es = acc { effects = es }
+
+self :: ActorState msg (ActorRef msg)
+self = wrap $ selfRef <$> get
+
+(!) :: ActorRef msg -> msg -> ActorState x ()
+to ! msg = wrap $ sendAcc to msg <$> get >>= put
+
+sendAcc to msg = updateEnv $ sendEnv to msg
+sendEnv to msg env = performEffect env $ send to msg
+
+updateEnv f acc = acc { env = f (env acc) }
 
 
-runActor :: Actor a => ActorStep a msg -> Behaviour a msg
-runActor f a af msg = case next of
-        (ChangeAction f') -> cont f'
-        Loop              -> cont f
-        End               -> Terminate es
-    where (next, s) = runState (unwrap (f msg)) (ActorAcc a [] af)
-          es = reverse $ effects s
-          cont nf = Continue (runActor nf) (factory s) es
+spawn :: ActorImpl a => ActorCreate a msg -> ActorState x (ActorRef msg)
+spawn cf = wrap $ do
+    s <- get
+    let (a, env') = newActor cf $ env s
+    put $ s { env = env' }
+    return a
+
+
+runActor :: Behaviour msg -> P.Behaviour msg
+runActor b (ref, e) msg = case next of
+        Loop          -> P.Continue (runActor b)  e'
+        (ChangeTo b') -> P.Continue (runActor b') e'
+        End           -> P.Terminate e'
+    where initial = ActorAcc ref e
+          (next, s') = run (b msg) initial
+          e' = env s'
+run = runState . unwrap
+
+
