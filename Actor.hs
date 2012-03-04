@@ -3,6 +3,7 @@
 module Control.Concurrent.Puctor.Actor (
     ActorEnv,
     newEnv,
+    boot,
     splitEnv,
     ActorRef,
     newActor,
@@ -33,8 +34,7 @@ type ActorStepCtx msg = (ActorRef msg, ActorEnv)
 data ActorRef msg = ActorRef Id deriving Eq
 
 instance Show (ActorRef msg) where
-    show (ActorRef id) = "<" ++ (tail $ show id) ++ ">"
-
+    show (ActorRef aid) = showActorId aid
 
 type RunActorEnv = ActorEnv -> IO ActorEnv
 type ActorCreate actor msg = ActorRef msg -> ActorEnv -> RunActorEnv -> IO (actor msg)
@@ -43,10 +43,6 @@ type ActorCreate actor msg = ActorRef msg -> ActorEnv -> RunActorEnv -> IO (acto
 data ActorBox msg = forall a. ActorImpl a => ActorBox (a msg)
 instance ActorImpl ActorBox where
     sendMsg msg (ActorBox a) = sendMsg msg a
-
-data NoopActor msg = NoopActor
-instance ActorImpl NoopActor where
-    sendMsg _ _ = return ()
 
 data ActorBoxU = forall msg. ActorBoxU msg
 type ActorMap = Map Id ActorBoxU
@@ -64,11 +60,12 @@ mapBoth f (a, b) = (f a, f b)
 updateIdSupply env s = env { idSupply = s }
 
 
+showActorId aid = "<" ++ (tail $ show aid) ++ ">"
+
 newActor :: ActorImpl actor => ActorCreate actor msg -> ActorEnv -> (ActorRef msg, ActorEnv)
 newActor f e = (ref, addTo e')
     where (ref, e') = newActorRef e
-          addTo = addDeferred $ Effect $ createActor f ref
-addDeferred f env = env { deferred = deferred env ++ [f] }
+          addTo = (flip performEffect) $ Effect $ createActor f ref
 
 createActor :: ActorImpl actor => ActorCreate actor msg -> ActorRef msg -> ActorEnv -> IO ActorEnv
 createActor f ref env = f ref nenv applyDeferred >>= registerActor env' ref
@@ -86,20 +83,32 @@ newActorRef = swap . fmap create . splitEnv
     where create = ActorRef . idFromSupply . idSupply
 
 performEffect :: ActorEnv -> Effect -> ActorEnv
-performEffect env e = addDeferred e env
+performEffect env e = performEffects env [e]
 
 performEffects :: ActorEnv -> [Effect] -> ActorEnv
-performEffects env e = foldl performEffect env e
+performEffects env e = env { deferred = deferred env ++ e}
 
 applyDeferred :: ActorEnv -> IO ActorEnv
-applyDeferred env = foldM (flip ($)) env (runEffect `map` deferred env)
+applyDeferred env = foldM (flip ($)) env' (runEffect `map` es)
+    where es = deferred env
+          env' = env { deferred = [] }
 
 send :: ActorRef msg -> msg -> Effect
 send a msg = Effect $ send' a msg
-send' (ActorRef aid) msg env = lookupActor aid <$> readTVarIO (actorMap env) >>= sendMsg msg >> return env
-lookupActor aid = fromMaybe NoopActor . fmap unbox . Map.lookup aid
+send' (ActorRef aid) msg env = lookupActor aid <$> readTVarIO tv >>= sendToBoxU msg >> return env
+    where tv = actorMap env
+
+lookupActor aid = (fromMaybe $ error errmsg) . (Map.lookup aid)
+    where errmsg = "Actor " ++ (showActorId aid) ++ " does not exist in the environment"
+
 
 box :: ActorImpl a => a msg -> ActorBoxU
 box = ActorBoxU . ActorBox
-unbox :: ActorImpl a => ActorBoxU -> a msg
-unbox (ActorBoxU box) = unsafeCoerce box
+
+sendToBoxU :: msg -> ActorBoxU -> IO ()
+sendToBoxU msg (ActorBoxU a) = sendMsg msg (unsafeCoerce a :: ActorBox msg)
+
+
+boot :: ActorImpl a => ActorCreate a () -> IO ()
+boot c = (sendStart . newActor c) <$> newEnv >>= applyDeferred >> return ()
+    where sendStart (a, e) = performEffect e $ send a ()
