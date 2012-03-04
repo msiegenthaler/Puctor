@@ -15,10 +15,13 @@ import Control.Concurrent
 
 
 
+actorName = show . actorId
+
 greet :: (Actor a, Actor to) => P.Behaviour a ((to String, String))
-greet = runActor greetStep
-    where greetStep (a, name) = do
-            a `send` ("Hi " ++ name)
+greet = runActor step
+    where step (a, name) = do
+            i <- self
+            a `send` ("Hi " ++ name ++ " from " ++ (actorName i))
             return Loop
 
 test = runActor step
@@ -28,32 +31,28 @@ test = runActor step
             return Loop
 
 
-handle :: Actor a => P.Behaviour a String
-handle _ af msg = unsafePerformIO $ do 
-    i <- myThreadId
-    print $ msg ++ " [" ++ (show i) ++ "]"
-    return $ P.Continue handle af []
-
-
 echo = I.loop step
     where step a _ msg = do
             print $ "Actor " ++ (show $ actorId a) ++ " got: " ++ msg
             return []
+
+noop = runActor step
+    where step _ = do
+            return Loop
 
 
 main :: Actor a => P.Behaviour a ()
 main = runActor $ \msg -> do
     e <- spawn $ FIO.newActor echo
     e `send` "One"
-    --g <- spawn $ F.newActor test
-    --g `send` "Two"
     h <- spawn $ F.newActor greet
     h `send` (e, "Mario")
+    e `send` "Two"
     return End
 
 
 start = do
     print "Start"
     boot $ F.newActor main
-    threadDelay 1000
+    threadDelay 300000
     print "End"
