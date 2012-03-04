@@ -45,14 +45,16 @@ Cabal-version:       >=1.2
 
 Library
   -- Modules exported by the library.
-  -- Exposed-modules:  
+  Exposed-modules: Control.Concurrent.Puctor.Actor, Control.Concurrent.Puctor.ActorImpl, 
+        Control.Concurrent.Puctor.Pure, Control.Concurrent.Puctor.Pure.ActorState,
+        Control.Concurrent.Puctor.IO,
+        Control.Concurrent.Puctor.ForkActor, Control.Concurrent.Puctor.ForkActorIO
   
   -- Packages needed in order to build this package.
-  Build-depends: base, uniqueid
+  Build-depends: base, uniqueid, stm, containers, mtl
   
   -- Modules not exported by this package.
-  -- Other-modules:       
+  Other-modules: Control.Concurrent.Puctor.ForkActor.Mailbox
   
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
   -- Build-tools:         
-  
