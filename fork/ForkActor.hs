@@ -1,5 +1,5 @@
 module Control.Concurrent.Puctor.ForkActor (
-    forkActor,
+    actor,
     ForkActor
 ) where
 
@@ -17,8 +17,8 @@ instance ActorImpl ForkActor where
     sendMsg msg (ForkActor _ _ mb) = mb `enqueue` msg
 
 
-forkActor :: Behaviour msg -> ActorCreate ForkActor msg
-forkActor b ref env run = ForkActor ref run <$> newMailbox >>= spawnActor
+actor :: Behaviour msg -> ActorCreate ForkActor msg
+actor b ref env run = ForkActor ref run <$> newMailbox >>= spawnActor
     where spawnActor a = (forkIO $ runActor a b env) >> return a
 
 runActor :: ForkActor msg -> Behaviour msg -> ActorEnv -> IO ()
