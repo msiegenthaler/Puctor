@@ -1,35 +1,28 @@
 module Control.Concurrent.Puctor.IO (
 	Next(..),
 	Behaviour,
-	direct,
-	loop,
-	fromPure
+	env,
+	fromPure,
+	loop
 ) where
 
 import Control.Monad
+import Control.Applicative
 import Control.Concurrent.Puctor.Actor
 import qualified Control.Concurrent.Puctor.Pure as P
 
-data Next actor msg = Terminate Effects
-                    | Continue (Behaviour actor msg) ActorFactory Effects
-type Behaviour actor msg = (actor msg) -> ActorFactory -> msg -> IO (Next actor msg)
 
+type Behaviour msg = ActorStepCtx msg -> msg -> IO (Next msg)
+data Next msg = Terminate ActorEnv
+              | Continue (Behaviour msg) ActorEnv
 
-effects (Terminate es) = es
-effects (Continue _ _ es) = es
+env (Terminate env) = env
+env (Continue _ env) = env
 
-direct :: Actor a => (msg -> IO Effects) -> a msg -> ActorFactory -> msg -> IO Effects
-direct f _ _ = f
+loop :: (msg -> IO [Effect]) -> Behaviour msg
+loop f (_, env) msg = Continue (loop f) <$> performEffects env <$> f msg
 
-direct2 :: Actor a => (msg -> IO b) -> a msg -> ActorFactory -> msg -> IO Effects
-direct2 f _ _ msg = f msg >> return []
-
-loop :: Actor a => (a msg -> ActorFactory -> msg -> IO Effects) -> Behaviour a msg
-loop b a af msg = again `liftM` (b a af msg)
-    where again es = Continue (loop b) af es
-
-
-fromPure :: P.Behaviour a msg -> Behaviour a msg
-fromPure b a af msg = return $ case b a af msg of
-	P.Continue b' af es -> Continue (fromPure b) af es
-	P.Terminate es      -> Terminate es
+fromPure :: P.Behaviour msg -> Behaviour msg
+fromPure b ctx msg = return $ case b ctx msg of
+	P.Continue b' env -> Continue (fromPure b') env
+	P.Terminate env   -> Terminate env

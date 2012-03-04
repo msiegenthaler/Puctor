@@ -1,23 +1,20 @@
 module Control.Concurrent.Puctor.Pure (
-	Next(..),
-	Behaviour,
-	direct,
-	loop
+    Next(..),
+    Behaviour,
+    env,
+    loop
 ) where
 
 import Control.Concurrent.Puctor.Actor
 
-data Next actor msg = Terminate Effects
-                    | Continue (Behaviour actor msg) ActorFactory Effects
-type Behaviour actor msg = (actor msg) -> ActorFactory -> msg -> Next actor msg
+type Behaviour msg = ActorStepCtx msg -> msg -> Next msg
+data Next msg = Terminate ActorEnv
+              | Continue (Behaviour msg) ActorEnv
 
 
-effects (Terminate es) = es
-effects (Continue _ _ es) = es
+env (Terminate env) = env
+env (Continue _ env) = env
 
 
-direct :: Actor a => (msg -> Effects) -> a msg -> ActorFactory -> msg -> Effects
-direct f _ _ = f
-
-loop :: Actor a => (a msg -> ActorFactory -> msg -> Effects) -> Behaviour a msg
-loop b a af msg = Continue (loop b) af $ b a af msg
+loop :: (msg -> [Effect]) -> Behaviour msg
+loop f (_, env) msg = Continue (loop f) $ performEffects env $ f msg

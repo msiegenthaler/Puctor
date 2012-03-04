@@ -1,50 +1,36 @@
 module Control.Concurrent.Puctor.ForkActorIO (
-    newActor,
+    forkActor,
     ForkActor
 ) where
 
 import Control.Concurrent.Puctor.IO
 import Control.Concurrent.Puctor.Actor
+import Control.Concurrent.Puctor.ActorImpl
 import Control.Concurrent.Puctor.ForkActor.Mailbox
 import Control.Monad
+import Control.Applicative
 import Control.Concurrent
-import System.IO.Unsafe
 
 
-data ForkActor msg = ForkActor ActorId (Mailbox msg)
-
-instance Actor ForkActor where
-    actorId   (ForkActor aid _)    = aid
-    (!) (ForkActor _ mb) msg = mb `enqueue` msg
-
-type ForkBehaviour msg  = Behaviour ForkActor msg
-type ForkCreator msg = ActorCreator (ForkActor msg)
-type ForkSpawn msg = ActorSpawn (ForkActor msg)
+data ForkActor msg = ForkActor (ActorRef msg) RunActorEnv (Mailbox msg)
+instance ActorImpl ForkActor where
+    sendMsg msg (ForkActor _ _ mb) = mb `enqueue` msg
 
 
-{-# NOINLINE newActor #-}
-newActor :: (ForkBehaviour msg) -> ForkCreator msg
-newActor b af = (afa, ActorSpawn a (startActor a afb b))
-    where (af', afa) = splitActorFactory af
-          (aid, afb) = newActorId af'
-          a = ForkActor aid $ unsafePerformIO newMailbox
+forkActor :: Behaviour msg -> ActorCreate ForkActor msg
+forkActor b ref env run = ForkActor ref run <$> newMailbox >>= spawnActor
+    where spawnActor a = (forkIO $ runActor a b env) >> return a
 
-actorMailbox :: (ForkActor msg) -> Mailbox msg
-actorMailbox (ForkActor _ mb) = mb
+runActor :: ForkActor msg -> Behaviour msg -> ActorEnv -> IO ()
+runActor a b env = nextMsg a >>= handle >>= handleNext a
+    where handle = b (ref a, env)
 
-nextMsg :: (ForkActor msg) -> IO msg
-nextMsg = dequeue . actorMailbox
+nextMsg = dequeue . mailbox
+    
+mailbox (ForkActor _ _ mb) = mb
+ref (ForkActor ref _ _) = ref
+runEnv (ForkActor _ r _) = r
 
-startActor a af b = (forkIO $ runActor a af b) >> return ()
-
-runActor :: (ForkActor msg) -> ActorFactory -> (ForkBehaviour msg) -> IO ()
-runActor a af b = nextMsg a >>= bp >>= (handleNext a)
-    where bp = b a af
-
-handleNext :: (ForkActor msg) -> (Next ForkActor msg) -> IO ()
-handleNext a (Terminate es)     = handleEffect `mapM` es >> return ()
-handleNext a (Continue b af es) = handleEffect `mapM` es >> runActor a af b
-
-handleEffect :: Effect -> IO ()
-handleEffect (Send (Message to msg)) = to ! msg
-handleEffect (Spawn (ActorSpawn _ io)) = io
+handleNext :: ForkActor msg -> Next msg -> IO ()
+handleNext a (Continue b env) = runEnv a env >>= runActor a b
+handleNext a (Terminate env)  = runEnv a env >> return ()
