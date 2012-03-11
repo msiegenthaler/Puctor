@@ -1,0 +1,5 @@
+Puctor
+------
+Experimental actor library for haskell to teach myself haskell.
+
+As a difference to most other actor framework it allows for (and prefers) pure actors (without IO). The actors that perform IO should be seperated.
