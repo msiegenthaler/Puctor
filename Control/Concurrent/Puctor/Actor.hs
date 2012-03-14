@@ -55,17 +55,17 @@ newEnv :: IO ActorEnv
 newEnv = ActorEnv <$> newTVarIO Map.empty <*> initIdSupply 'A' <*> return []
 
 splitEnv :: ActorEnv -> (ActorEnv, ActorEnv)
-splitEnv env = ((mapBoth $ updateIdSupply env) . splitIdSupply . idSupply) env
+splitEnv env = (mapBoth (updateIdSupply env) . splitIdSupply . idSupply) env
 mapBoth f (a, b) = (f a, f b)
 updateIdSupply env s = env { idSupply = s }
 
 
-showActorId aid = "<" ++ (tail $ show aid) ++ ">"
+showActorId aid = "<" ++ tail (show aid) ++ ">"
 
 newActor :: ActorImpl actor => ActorCreate actor msg -> ActorEnv -> (ActorRef msg, ActorEnv)
 newActor f e = (ref, addTo e')
     where (ref, e') = newActorRef e
-          addTo = (flip performEffect) $ Effect $ createActor f ref
+          addTo = flip performEffect $ Effect $ createActor f ref
 
 createActor :: ActorImpl actor => ActorCreate actor msg -> ActorRef msg -> ActorEnv -> IO ActorEnv
 createActor f ref env = f ref nenv applyDeferred >>= registerActor env' ref
@@ -81,6 +81,7 @@ registerActor env (ActorRef aid) a = atomically $ do
 newActorRef :: ActorEnv -> (ActorRef msg, ActorEnv)
 newActorRef = swap . fmap create . splitEnv
     where create = ActorRef . idFromSupply . idSupply
+swap (a,b) = (b,a)
 
 performEffect :: ActorEnv -> Effect -> ActorEnv
 performEffect env e = performEffects env [e]
@@ -98,8 +99,8 @@ send a msg = Effect $ send' a msg
 send' (ActorRef aid) msg env = lookupActor aid <$> readTVarIO tv >>= sendToBoxU msg >> return env
     where tv = actorMap env
 
-lookupActor aid = (fromMaybe $ error errmsg) . (Map.lookup aid)
-    where errmsg = "Actor " ++ (showActorId aid) ++ " does not exist in the environment"
+lookupActor aid = fromMaybe (error errmsg) . Map.lookup aid
+    where errmsg = "Actor " ++ showActorId aid ++ " does not exist in the environment"
 
 
 box :: ActorImpl a => a msg -> ActorBoxU

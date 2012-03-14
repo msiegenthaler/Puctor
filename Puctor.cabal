@@ -51,7 +51,7 @@ Library
         Control.Concurrent.Puctor.ForkActor, Control.Concurrent.Puctor.ForkActorIO
   
   -- Packages needed in order to build this package.
-  Build-depends: base, uniqueid, stm, containers, mtl
+  Build-depends: base >= 4.2, uniqueid, stm, containers, mtl
   
   -- Modules not exported by this package.
   Other-modules: Control.Concurrent.Puctor.ForkActor.Mailbox

@@ -22,7 +22,7 @@ wrap = ActorState
 unwrap (ActorState s) = s
 
 instance Monad (ActorState msg) where
-  x >>= f = wrap $ (unwrap x) >>= (unwrap . f)
+  x >>= f = wrap $ unwrap x >>= (unwrap . f)
   return r = wrap $ return r
 
 

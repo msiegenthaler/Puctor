@@ -19,7 +19,7 @@ instance ActorImpl ForkActor where
 
 actor :: Behaviour msg -> ActorCreate ForkActor msg
 actor b ref env run = ForkActor ref run <$> newMailbox >>= spawnActor
-    where spawnActor a = (forkIO $ runActor a b env) >> return a
+    where spawnActor a = forkIO (runActor a b env) >> return a
 
 runActor :: ForkActor msg -> Behaviour msg -> ActorEnv -> IO ()
 runActor a b env = handle <$> nextMsg a >>= handleNext a

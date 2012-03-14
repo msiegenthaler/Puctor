@@ -10,16 +10,14 @@ module Control.Concurrent.Puctor.ForkActor.Mailbox (
 import Control.Concurrent
 import Control.Concurrent.Chan
 import Control.Monad
-import Data.Dynamic
 
-
-newtype Mailbox a = Mailbox (Chan a) deriving (Typeable)
+newtype Mailbox a = Mailbox (Chan a)
 
 newMailbox :: IO (Mailbox a)
 newMailbox = Mailbox `liftM` newChan
 
-dequeue :: (Mailbox a) -> (IO a)
+dequeue :: Mailbox a -> IO a
 dequeue (Mailbox c) = readChan c
 
-enqueue :: (Mailbox a) -> a -> (IO ())
-enqueue (Mailbox c) msg = writeChan c msg
+enqueue :: Mailbox a -> a -> IO ()
+enqueue (Mailbox c) = writeChan c

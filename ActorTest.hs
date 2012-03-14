@@ -34,13 +34,13 @@ main = runActor $ \msg -> do
 
 echo :: I.Behaviour String
 echo (a, env) msg = do
-    print $ "Actor " ++ (show a) ++ " got: " ++ msg
+    print $ "Actor " ++ show a ++ " got: " ++ msg
     return $ I.Continue echo env
 
 
 test :: I.Behaviour ()
 test (a, env) _ = do
-    print $ "Started test as Actor " ++ (show a)
+    print $ "Started test as Actor " ++ show a
     return $ I.Terminate env
 
 
